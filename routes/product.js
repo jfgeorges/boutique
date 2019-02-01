@@ -86,7 +86,7 @@ router.get("/product", async (req, res) => {
 
     // Ajout de la pagination
     if (req.query.page) {
-      search.limit(5).skip(5 * req.query.page);
+      search.limit(5).skip(5 * (req.query.page - 1));
     }
 
     // Exécution de la recherche
