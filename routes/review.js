@@ -9,11 +9,20 @@ const Category = require("../models/mcategory");
 // --------- //
 // FONCTIONS //
 // --------- //
-// Supprime les valeurs === value du tableau 'arr'
-const arrayRemove = (arr, value) => {
-  return arr.filter(ele => {
-    return ele !== value;
+
+// Calcule la moyenne des notes d'un produit
+const ratingCalculate = async objProduct => {
+  // Ajoute le détail des Reviews à la variable objet 'product'
+  await Review.populate(objProduct, {
+    path: "reviews",
+    model: "Review"
   });
+  // Calcul de la moyenne et arrondi à 2 décimales
+  objProduct.averageRating = (
+    objProduct.reviews.reduce((total, currentReview) => {
+      return total + currentReview.rating;
+    }, 0) / objProduct.reviews.length
+  ).toFixed(2);
 };
 
 // CREATE
@@ -38,17 +47,8 @@ router.post("/review/create", async (req, res) => {
         // const reviewCreated = await newReview.save(); // Sauvegarde de la Review pour récupérer son ID
         // product.reviews.push(reviewCreated._id);
         product.reviews.push(await newReview.save()); // Changé pour sauver la Review et enregistrer l'Id en une seule étape
-        // Ajoute le détail des Reviews à la variable objet 'product'
-        await Review.populate(product, {
-          path: "reviews",
-          model: "Review"
-        });
-        // Calcul de la moyenne et arrondi à 2 décimales
-        product.averageRating = (
-          product.reviews.reduce((total, currentReview) => {
-            return total + currentReview.rating;
-          }, 0) / product.reviews.length
-        ).toFixed(2);
+        // Calcul de la note moyenne
+        await ratingCalculate(product);
         // Sauvegarde du produit noté
         await product.save();
         nbReviews++;
@@ -77,27 +77,18 @@ router.post("/review/update", async (req, res) => {
       await review.save();
 
       // MAJ de la note moyenne du produit
+      // Identifie le produit à partir de l'Id review
       const product = await Product.findOne({ reviews: { $in: [req.query.reviewId] } });
       if (product) {
-        // IDEM CREATE
-        // Ajoute le détail des Reviews à la variable objet 'product'
-        await Review.populate(product, {
-          path: "reviews",
-          model: "Review"
+        // Calcul de la moyenne
+        await ratingCalculate(product);
+        product.save();
+        res.json(product);
+      } else {
+        res.status(400).json({
+          message: "Review not found"
         });
-        // Calcul de la moyenne et arrondi à 2 décimales
-        product.averageRating = (
-          product.reviews.reduce((total, currentReview) => {
-            return total + currentReview.rating;
-          }, 0) / product.reviews.length
-        ).toFixed(2);
       }
-      product.save();
-      res.json(product);
-    } else {
-      res.status(400).json({
-        message: "Review not found"
-      });
     }
   } catch (error) {
     res.status(400).json({
@@ -123,24 +114,11 @@ router.post("/review/delete", async (req, res) => {
         if (newReviews.length > 0) {
           product.reviews = newReviews;
         }
-        // console.log("Avant:", product.reviews);
-        // IDEM CREATE
-        // Ajoute le détail des Reviews à la variable objet 'product'
-        await Review.populate(product, {
-          path: "reviews",
-          model: "Review"
-        });
-        // Calcul de la moyenne et arrondi à 2 décimales
-        // console.log("Après:", product.reviews);
-        product.averageRating = (
-          product.reviews.reduce((total, currentReview) => {
-            return total + currentReview.rating;
-          }, 0) / product.reviews.length
-        ).toFixed(2);
+        // Calcul de la note moyenne du produit
+        await ratingCalculate(product);
+        product.save();
       }
-      product.save();
       await review.remove();
-
       res.json({ message: "Review removed" });
     } else {
       res.status(400).json({
